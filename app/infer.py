@@ -2,13 +2,11 @@ import pickle
 import re
 import sys
 
+import fire
 import nltk
 import pandas as pd
 import pymorphy3
 from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
-
-# from sklearn.linear_model import LogisticRegression
 from spellchecker import SpellChecker
 from tqdm import tqdm
 
@@ -19,7 +17,7 @@ class LogRegClassifier:
     def __init__(self):
         with open("./models/logreg.pickle", "rb") as fs:
             self.model = pickle.load(fs)
-        
+
         with open("./models/tfidf-vectorizer.pickle", "rb") as fs:
             self.vectorizer = pickle.load(fs)
 
@@ -61,7 +59,9 @@ class LogRegClassifier:
 
         # Приведение к начальной форме и удаление стоп-слов
         lemmatized_words = [
-            self.morph.parse(word)[0].normal_form for word in corrected_words
+            self.morph.parse(word)[0].normal_form
+            for word in corrected_words
+            if word is not None
         ]
         filtered_words = [
             word for word in lemmatized_words if word not in self.stopwords_ru
@@ -78,7 +78,9 @@ class LogRegClassifier:
     ) -> pd.DataFrame:
         if preprocess:
             print("\nPREPROCESSING...", file=sys.stderr)
-            data[purpose_col_name] = data[purpose_col_name].progress_apply(self.preprocess_text)
+            data[purpose_col_name] = data[purpose_col_name].progress_apply(
+                self.preprocess_text
+            )
 
         X = self.vectorizer.transform(data[purpose_col_name])
 
@@ -91,7 +93,7 @@ class LogRegClassifier:
         return pd.DataFrame({"Index": range(len(categories)), "Category": categories})
 
 
-def main(input_path: str, output_path: str):
+def main(input_path: str, output_path: str | None = None):
     model = LogRegClassifier()
     data = pd.read_csv(
         input_path,
@@ -100,11 +102,11 @@ def main(input_path: str, output_path: str):
         header=None,
     )
     predicts = model.predict(data)
-    predicts.to_csv(output_path, sep="\t", header=False, index=False)
     for idx, label in predicts.values:
         print(f"{idx}\t{label}")
+    if output_path:
+        predicts.to_csv(output_path, sep="\t", header=False, index=False)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
-    # main("data/payments_main.tsv", "submission.tsv")
+    fire.Fire(main)
